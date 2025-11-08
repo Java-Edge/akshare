@@ -1,0 +1,229 @@
+#!/usr/bin/env python
+# -*- coding:utf-8 -*-
+"""
+QDII基金分析工具
+传入指定的QDII基金代码，查询近30个交易日的涨跌幅数据并绘制折线图
+"""
+
+import akshare as ak
+import pandas as pd
+import matplotlib.pyplot as plt
+from datetime import datetime, timedelta
+import argparse
+import matplotlib.font_manager as fm
+
+fund_code = "513100"  # 可以替换为其他QDII基金代码
+days = 30  # 分析最近30个交易日
+
+def get_qdii_fund_data(fund_code: str, days: int = 30) -> pd.DataFrame:
+    """
+    获取QDII基金近N个交易日的涨跌幅数据
+
+    :param fund_code: QDII基金代码
+    :param days: 交易日天数
+    :return: 包含涨跌幅数据的DataFrame
+    """
+    try:
+        # 计算开始日期（多取一些数据确保有足够的交易日）
+        end_date = datetime.now().strftime("%Y%m%d")
+        start_date = (datetime.now() - timedelta(days=days*2)).strftime("%Y%m%d")
+
+        # 使用现有的ETF历史数据接口
+        df = ak.fund_etf_hist_em(
+            symbol=fund_code,
+            period="daily",
+            start_date=start_date,
+            end_date=end_date,
+            adjust=""
+        )
+
+        if df.empty:
+            raise ValueError(f"未找到基金代码 {fund_code} 的历史数据")
+
+        # 确保日期列是datetime类型
+        df['日期'] = pd.to_datetime(df['日期'])
+
+        # 按日期排序并取最近N个交易日
+        df = df.sort_values('日期', ascending=False).head(days)
+
+        return df.reset_index(drop=True)
+
+    except Exception as e:
+        print(f"❌ 网络请求失败: {e}")
+        print("💡 正在尝试使用模拟数据演示功能...")
+
+        # 生成模拟数据用于演示
+        return generate_mock_data(fund_code, days)
+
+def generate_mock_data(fund_code: str, days: int = 30) -> pd.DataFrame:
+    """
+    生成模拟的QDII基金数据用于演示
+
+    :param fund_code: 基金代码
+    :param days: 天数
+    :return: 模拟数据DataFrame
+    """
+    import numpy as np
+
+    # 生成日期
+    dates = pd.date_range(end=datetime.now(), periods=days, freq='B')  # 工作日
+
+    # 生成模拟的涨跌幅数据 (-3% 到 +5% 之间)
+    np.random.seed(42)  # 固定随机种子以便重现
+    changes = np.random.uniform(-3, 5, days)
+
+    # 生成收盘价（从100开始）
+    close_prices = [100]
+    for change in changes:
+        close_prices.append(close_prices[-1] * (1 + change/100))
+    close_prices = close_prices[1:]  # 去掉初始值
+
+    df = pd.DataFrame({
+        '日期': dates,
+        '开盘': [p * (1 + np.random.uniform(-0.01, 0.01)) for p in close_prices],
+        '收盘': close_prices,
+        '最高': [p * (1 + np.random.uniform(0, 0.02)) for p in close_prices],
+        '最低': [p * (1 - np.random.uniform(0, 0.02)) for p in close_prices],
+        '涨跌幅': changes,
+        '成交量': np.random.randint(100000, 500000, days),
+        '成交额': [v * p for v, p in zip(np.random.randint(100000, 500000, days), close_prices)]
+    })
+
+    print("📋 使用模拟数据演示功能（实际使用时需要网络连接）")
+    return df
+
+def plot_fund_performance(df: pd.DataFrame, fund_code: str, days: int = 30, save_path: str = None):
+    """
+    绘制基金涨跌幅折线图
+
+    :param df: 包含基金数据的DataFrame
+    :param fund_code: 基金代码
+    :param days: 交易日天数
+    :param save_path: 图片保存路径
+    """
+    # 设置中文字体支持
+    try:
+        # 尝试使用系统支持的中文字体
+        zh_fonts = ['PingFang SC', 'Hiragino Sans GB', 'STHeiti', 'Microsoft YaHei', 'SimHei', 'DejaVu Sans']
+        for font_name in zh_fonts:
+            if font_name in [f.name for f in fm.fontManager.ttflist]:
+                plt.rcParams['font.sans-serif'] = [font_name, 'DejaVu Sans']
+                plt.rcParams['axes.unicode_minus'] = False  # 正确显示负号
+                break
+    except:
+        # 如果字体设置失败，使用默认设置
+        pass
+
+    plt.figure(figsize=(12, 6))
+    plt.plot(df['日期'], df['涨跌幅'], marker='o', linestyle='-', linewidth=2, markersize=4)
+
+    # 设置图表标题和标签
+    plt.title(f'QDII基金 {fund_code} 近{days}个交易日涨跌幅', fontsize=16, fontweight='bold')
+    plt.xlabel('日期', fontsize=12)
+    plt.ylabel('涨跌幅 (%)', fontsize=12)
+
+    # 设置x轴日期格式
+    plt.gcf().autofmt_xdate()
+
+    # 添加网格
+    plt.grid(True, alpha=0.3)
+
+    # 添加零线
+    plt.axhline(y=0, color='r', linestyle='--', alpha=0.7)
+
+    # 在最后一个数据点标注数值
+    last_date = df['日期'].iloc[-1]
+    last_change = df['涨跌幅'].iloc[-1]
+    plt.annotate(f'{last_change:.2f}%',
+                xy=(last_date, last_change),
+                xytext=(10, 10),
+                textcoords='offset points',
+                bbox=dict(boxstyle='round,pad=0.5', fc='yellow', alpha=0.5),
+                arrowprops=dict(arrowstyle='->', connectionstyle='arc3,rad=0'))
+
+    plt.tight_layout()
+
+    # 保存或显示图片
+    if save_path:
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        print(f"图表已保存至: {save_path}")
+    else:
+        plt.show()
+
+def analyze_fund_performance(df: pd.DataFrame, fund_code: str, days: int):
+    """
+    分析基金表现并输出统计信息
+
+    :param df: 包含基金数据的DataFrame
+    :param fund_code: 基金代码
+    :param days: 交易日天数
+    """
+    print(f"\n📊 QDII基金 {fund_code} 近{days}个交易日表现分析:")
+    print("=" * 50)
+
+    # 显示最近10条数据
+    print(f"\n最近10个交易日数据:")
+    print(df[['日期', '收盘', '涨跌幅']].head(10).to_string(index=False))
+
+    # 计算统计信息
+    total_return = df['涨跌幅'].sum()
+    avg_daily_return = df['涨跌幅'].mean()
+    max_gain = df['涨跌幅'].max()
+    max_loss = df['涨跌幅'].min()
+    positive_days = len(df[df['涨跌幅'] > 0])
+    volatility = df['涨跌幅'].std()
+
+    print(f"\n?? 统计分析:")
+    print(f"总收益: {total_return:.2f}%")
+    print(f"日均收益: {avg_daily_return:.2f}%")
+    print(f"最大单日涨幅: {max_gain:.2f}%")
+    print(f"最大单日跌幅: {max_loss:.2f}%")
+    print(f"波动率: {volatility:.2f}%")
+    print(f"上涨天数: {positive_days}/{days} ({positive_days/days*100:.1f}%)")
+
+    # 投资建议
+    print(f"\n?? 投资建议:")
+    if total_return > 5:
+        print("✅ 近期表现强劲，可以考虑关注或适量买入")
+    elif total_return > 0:
+        print("📊 近期表现平稳，可以继续观察")
+    else:
+        print("⚠️  近期表现较弱，建议谨慎操作")
+
+    if volatility > 3:
+        print("📉 波动较大，风险较高，建议控制仓位")
+    elif volatility < 1:
+        print("📈 波动较小，相对稳健")
+
+def main():
+    """主函数 - 直接代码调用示例"""
+    try:
+        # 直接在代码中设置参数
+        fund_code = "513100"  # 纳斯达克100ETF，可以改成其他代码
+        days = 30             # 分析最近30个交易日
+        save_path = None      # 图片保存路径，设为None则显示不保存
+
+        # 获取基金数据
+        print(f"正在获取基金 {fund_code} 近{days}个交易日数据...")
+        df = get_qdii_fund_data(fund_code, days)
+
+        # 分析基金表现
+        analyze_fund_performance(df, fund_code, days)
+
+        # 绘制图表
+        print(f"\n🎨 正在生成涨跌幅折线图...")
+        plot_fund_performance(df, fund_code, days, save_path)
+
+    except ValueError as e:
+        print(f"❌ 错误: {e}")
+        print("\n💡 常见QDII基金代码示例:")
+        print("   - 513100: 纳斯达克100ETF")
+        print("   - 513500: 标普500ETF")
+        print("   - 159920: 恒生ETF")
+        print("   - 513050: 中概互联ETF")
+    except Exception as e:
+        print(f"❌ 发生错误: {e}")
+        print("💡 请检查网络连接或代理设置，或稍后重试")
+
+if __name__ == "__main__":
+    main()
