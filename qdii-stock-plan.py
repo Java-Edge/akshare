@@ -13,6 +13,7 @@ import matplotlib.font_manager as fm
 import pymysql
 from pymysql import Error
 import database_config
+from investment_advisor import quick_advice
 
 fund_code = "513100"  # 可以替换为其他QDII基金代码
 days = 30  # 分析最近30个交易日
@@ -289,7 +290,7 @@ def analyze_fund_performance(df: pd.DataFrame, fund_code: str, days: int):
     positive_days = len(df[df['涨跌幅'] > 0])
     volatility = df['涨跌幅'].std()
 
-    print(f"\n📈 统计分析:")
+    print(f"\n📈 基础统计:")
     print(f"总收益: {total_return:.2f}%")
     print(f"日均收益: {avg_daily_return:.2f}%")
     print(f"最大单日涨幅: {max_gain:.2f}%")
@@ -297,19 +298,9 @@ def analyze_fund_performance(df: pd.DataFrame, fund_code: str, days: int):
     print(f"波动率: {volatility:.2f}%")
     print(f"上涨天数: {positive_days}/{days} ({positive_days/days*100:.1f}%)")
 
-    # 投资建议
-    print(f"\n💡 投资建议:")
-    if total_return > 5:
-        print("✅ 近期表现强劲，可以考虑关注或适量买入")
-    elif total_return > 0:
-        print("📊 近期表现平稳，可以继续观察")
-    else:
-        print("⚠️  近期表现较弱，建议谨慎操作")
+    # 使用专业的投资建议模块（独立的详细分析和建议）
+    quick_advice(df, fund_code)
 
-    if volatility > 3:
-        print("📉 波动较大，风险较高，建议控制仓位")
-    elif volatility < 1:
-        print("📈 波动较小，相对稳健")
 
 def save_to_database(df: pd.DataFrame, fund_code: str):
     """
