@@ -9,7 +9,6 @@ import akshare as ak
 import pandas as pd
 import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
-import argparse
 import matplotlib.font_manager as fm
 import pymysql
 from pymysql import Error
@@ -27,6 +26,7 @@ def query_from_database(fund_code: str, start_date: str, end_date: str) -> pd.Da
     :param end_date: 结束日期 (YYYY-MM-DD)
     :return: 包含基金数据的DataFrame
     """
+    connection = None
     try:
         connection = pymysql.connect(**database_config.MYSQL_CONFIG)
         with connection.cursor() as cursor:
@@ -34,8 +34,24 @@ def query_from_database(fund_code: str, start_date: str, end_date: str) -> pd.Da
             results = cursor.fetchall()
 
             if results:
-                df = pd.DataFrame(results)
-                df['日期'] = pd.to_datetime(df['日期'])
+                # 获取列名
+                column_names = [desc[0] for desc in cursor.description]
+                df = pd.DataFrame(results, columns=column_names)
+
+                # 确保日期列是datetime类型
+                if '日期' in df.columns:
+                    df['日期'] = pd.to_datetime(df['日期'])
+
+                # 将数值列从 Decimal 转换为 float
+                numeric_columns = ['开盘', '收盘', '最高', '最低', '涨跌幅', '成交额']
+                for col in numeric_columns:
+                    if col in df.columns:
+                        df[col] = df[col].astype(float)
+
+                # 将成交量转换为整数
+                if '成交量' in df.columns:
+                    df['成交量'] = df['成交量'].astype(int)
+
                 return df
             else:
                 return pd.DataFrame()
@@ -44,7 +60,7 @@ def query_from_database(fund_code: str, start_date: str, end_date: str) -> pd.Da
         print(f"❌ 数据库查询失败: {e}")
         return pd.DataFrame()
     finally:
-        if 'connection' in locals() and connection.open:
+        if connection and connection.open:
             connection.close()
 
 def get_missing_dates(existing_dates, all_dates):
@@ -58,13 +74,13 @@ def get_missing_dates(existing_dates, all_dates):
     existing_date_set = set(existing_dates)
     return [date for date in all_dates if date not in existing_date_set]
 
-def get_qdii_fund_data(fund_code: str, days: int = 30) -> pd.DataFrame:
+def get_qdii_fund_data(fund_code: str, days: int = 30) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
     获取QDII基金近N个交易日的涨跌幅数据（智能获取：先查数据库，再补全缺失数据）
 
     :param fund_code: QDII基金代码
     :param days: 交易日天数
-    :return: 包含涨跌幅数据的DataFrame
+    :return: (完整数据DataFrame, 新获取的数据DataFrame)
     """
     try:
         # 计算日期范围
@@ -84,8 +100,15 @@ def get_qdii_fund_data(fund_code: str, days: int = 30) -> pd.DataFrame:
         all_required_dates = pd.date_range(end=end_date, periods=days, freq='B')  # 工作日
 
         if not db_df.empty:
+            # 数据库返回的是中文列名
+            date_col = '日期'
+
+            # 确保日期列是 datetime 类型
+            if db_df[date_col].dtype == 'object':
+                db_df[date_col] = pd.to_datetime(db_df[date_col])
+
             # 3. 检查哪些日期在数据库中缺失
-            existing_dates = set(db_df['日期'].dt.date)
+            existing_dates = set(db_df[date_col].dt.date)
             missing_dates = [date for date in all_required_dates if date.date() not in existing_dates]
 
             if missing_dates:
@@ -104,18 +127,21 @@ def get_qdii_fund_data(fund_code: str, days: int = 30) -> pd.DataFrame:
 
                 if not api_df.empty:
                     api_df['日期'] = pd.to_datetime(api_df['日期'])
-                    # 5. 合并数据库数据和API数据
+                    # 5. 合并数据库数据和API数据（都使用中文列名）
                     combined_df = pd.concat([db_df, api_df], ignore_index=True)
                     # 去重并排序
                     combined_df = combined_df.drop_duplicates('日期').sort_values('日期', ascending=False).head(days)
                     print(f"✅ 成功合并数据库和API数据，总计 {len(combined_df)} 条数据")
-                    return combined_df.reset_index(drop=True)
+                    # 返回完整数据和新获取的API数据
+                    return combined_df.reset_index(drop=True), api_df.reset_index(drop=True)
                 else:
                     print("⚠️  API未返回缺失日期数据，使用数据库现有数据")
-                    return db_df.sort_values('日期', ascending=False).head(days).reset_index(drop=True)
+                    # 返回数据库数据，新数据为空
+                    return db_df.sort_values('日期', ascending=False).head(days).reset_index(drop=True), pd.DataFrame()
             else:
                 print("✅ 数据库已包含所有需要的数据")
-                return db_df.sort_values('日期', ascending=False).head(days).reset_index(drop=True)
+                # 返回数据库数据，新数据为空
+                return db_df.sort_values('日期', ascending=False).head(days).reset_index(drop=True), pd.DataFrame()
         else:
             # 数据库中没有数据，完全从API获取
             print("📡 数据库中无数据，从API获取完整数据...")
@@ -135,12 +161,15 @@ def get_qdii_fund_data(fund_code: str, days: int = 30) -> pd.DataFrame:
 
             df['日期'] = pd.to_datetime(df['日期'])
             df = df.sort_values('日期', ascending=False).head(days)
-            return df.reset_index(drop=True)
+            # 返回完整数据，新数据就是完整数据（因为数据库为空）
+            return df.reset_index(drop=True), df.reset_index(drop=True)
 
     except Exception as e:
         print(f"❌ 数据获取失败: {e}")
         print("💡 正在尝试使用模拟数据演示功能...")
-        return generate_mock_data(fund_code, days)
+        mock_df = generate_mock_data(fund_code, days)
+        # 返回模拟数据，新数据为空（模拟数据不保存）
+        return mock_df, pd.DataFrame()
 
 def generate_mock_data(fund_code: str, days: int = 30) -> pd.DataFrame:
     """
@@ -260,7 +289,7 @@ def analyze_fund_performance(df: pd.DataFrame, fund_code: str, days: int):
     positive_days = len(df[df['涨跌幅'] > 0])
     volatility = df['涨跌幅'].std()
 
-    print(f"\n?? 统计分析:")
+    print(f"\n📈 统计分析:")
     print(f"总收益: {total_return:.2f}%")
     print(f"日均收益: {avg_daily_return:.2f}%")
     print(f"最大单日涨幅: {max_gain:.2f}%")
@@ -269,7 +298,7 @@ def analyze_fund_performance(df: pd.DataFrame, fund_code: str, days: int):
     print(f"上涨天数: {positive_days}/{days} ({positive_days/days*100:.1f}%)")
 
     # 投资建议
-    print(f"\n?? 投资建议:")
+    print(f"\n💡 投资建议:")
     if total_return > 5:
         print("✅ 近期表现强劲，可以考虑关注或适量买入")
     elif total_return > 0:
@@ -289,6 +318,7 @@ def save_to_database(df: pd.DataFrame, fund_code: str):
     :param df: 包含基金数据的DataFrame
     :param fund_code: 基金代码
     """
+    connection = None
     try:
         # 连接数据库
         connection = pymysql.connect(**database_config.MYSQL_CONFIG)
@@ -313,12 +343,12 @@ def save_to_database(df: pd.DataFrame, fund_code: str):
             updated_time = CURRENT_TIMESTAMP
             """
 
-            # 准备数据
+            # 准备数据（使用中文列名）
             data_to_insert = []
             for _, row in df.iterrows():
                 data_to_insert.append((
                     fund_code,
-                    row['日期'].date(),
+                    row['日期'].date() if hasattr(row['日期'], 'date') else row['日期'],
                     row['开盘'],
                     row['收盘'],
                     row['最高'],
@@ -336,11 +366,11 @@ def save_to_database(df: pd.DataFrame, fund_code: str):
 
     except Error as e:
         print(f"❌ 数据库错误: {e}")
-        print("?? 请检查数据库配置和连接")
+        print("💡 请检查数据库配置和连接")
     except Exception as e:
         print(f"❌ 保存数据时发生错误: {e}")
     finally:
-        if 'connection' in locals() and connection.open:
+        if connection and connection.open:
             connection.close()
 
 def main():
@@ -351,16 +381,19 @@ def main():
         days = 30             # 分析最近30个交易日
         save_path = None      # 图片保存路径，设为None则显示不保存
 
-        # 获取基金数据
+        # 获取基金数据（返回完整数据和新获取的数据）
         print(f"正在获取基金 {fund_code} 近{days}个交易日数据...")
-        df = get_qdii_fund_data(fund_code, days)
+        df, new_data = get_qdii_fund_data(fund_code, days)
 
         # 分析基金表现
         analyze_fund_performance(df, fund_code, days)
 
-        # 保存数据到数据库
-        print(f"\n💾 正在保存数据到数据库...")
-        save_to_database(df, fund_code)
+        # 只保存新获取的数据到数据库
+        if not new_data.empty:
+            print(f"\n💾 正在保存 {len(new_data)} 条新数据到数据库...")
+            save_to_database(new_data, fund_code)
+        else:
+            print(f"\n✅ 无需保存，数据库已是最新")
 
         # 绘制图表
         print(f"\n🎨 正在生成涨跌幅折线图...")
