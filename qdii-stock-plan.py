@@ -11,6 +11,9 @@ import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
 import argparse
 import matplotlib.font_manager as fm
+import pymysql
+from pymysql import Error
+import database_config
 
 fund_code = "513100"  # 可以替换为其他QDII基金代码
 days = 30  # 分析最近30个交易日
@@ -195,6 +198,67 @@ def analyze_fund_performance(df: pd.DataFrame, fund_code: str, days: int):
     elif volatility < 1:
         print("📈 波动较小，相对稳健")
 
+def save_to_database(df: pd.DataFrame, fund_code: str):
+    """
+    将基金数据保存到MySQL数据库
+
+    :param df: 包含基金数据的DataFrame
+    :param fund_code: 基金代码
+    """
+    try:
+        # 连接数据库
+        connection = pymysql.connect(**database_config.MYSQL_CONFIG)
+
+        with connection.cursor() as cursor:
+            # 检查表是否存在，如果不存在则创建
+            cursor.execute(database_config.CREATE_TABLE_SQL)
+
+            # 准备插入数据的SQL
+            insert_sql = """
+            INSERT INTO qdii_fund_data 
+            (fund_code, trade_date, open_price, close_price, high_price, low_price, change_percent, volume, turnover)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON DUPLICATE KEY UPDATE 
+            open_price = VALUES(open_price),
+            close_price = VALUES(close_price),
+            high_price = VALUES(high_price),
+            low_price = VALUES(low_price),
+            change_percent = VALUES(change_percent),
+            volume = VALUES(volume),
+            turnover = VALUES(turnover),
+            updated_time = CURRENT_TIMESTAMP
+            """
+
+            # 准备数据
+            data_to_insert = []
+            for _, row in df.iterrows():
+                data_to_insert.append((
+                    fund_code,
+                    row['日期'].date(),
+                    row['开盘'],
+                    row['收盘'],
+                    row['最高'],
+                    row['最低'],
+                    row['涨跌幅'],
+                    row['成交量'],
+                    row['成交额']
+                ))
+
+            # 批量插入数据
+            cursor.executemany(insert_sql, data_to_insert)
+            connection.commit()
+
+            print(f"✅ 成功保存 {len(data_to_insert)} 条数据到数据库")
+
+    except Error as e:
+        print(f"❌ 数据库错误: {e}")
+        print("?? 请检查数据库配置和连接")
+    except Exception as e:
+        print(f"❌ 保存数据时发生错误: {e}")
+    finally:
+        if 'connection' in locals() and connection.open:
+            connection.close()
+
 def main():
     """主函数 - 直接代码调用示例"""
     try:
@@ -209,6 +273,10 @@ def main():
 
         # 分析基金表现
         analyze_fund_performance(df, fund_code, days)
+
+        # 保存数据到数据库
+        print(f"\n💾 正在保存数据到数据库...")
+        save_to_database(df, fund_code)
 
         # 绘制图表
         print(f"\n🎨 正在生成涨跌幅折线图...")
