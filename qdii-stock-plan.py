@@ -18,44 +18,128 @@ import database_config
 fund_code = "513100"  # 可以替换为其他QDII基金代码
 days = 30  # 分析最近30个交易日
 
+def query_from_database(fund_code: str, start_date: str, end_date: str) -> pd.DataFrame:
+    """
+    从数据库查询基金数据
+
+    :param fund_code: 基金代码
+    :param start_date: 开始日期 (YYYY-MM-DD)
+    :param end_date: 结束日期 (YYYY-MM-DD)
+    :return: 包含基金数据的DataFrame
+    """
+    try:
+        connection = pymysql.connect(**database_config.MYSQL_CONFIG)
+        with connection.cursor() as cursor:
+            cursor.execute(database_config.QUERY_DATA_SQL, (fund_code, start_date, end_date))
+            results = cursor.fetchall()
+
+            if results:
+                df = pd.DataFrame(results)
+                df['日期'] = pd.to_datetime(df['日期'])
+                return df
+            else:
+                return pd.DataFrame()
+
+    except Exception as e:
+        print(f"❌ 数据库查询失败: {e}")
+        return pd.DataFrame()
+    finally:
+        if 'connection' in locals() and connection.open:
+            connection.close()
+
+def get_missing_dates(existing_dates, all_dates):
+    """
+    获取缺失的日期
+
+    :param existing_dates: 已存在的日期列表
+    :param all_dates: 所有需要的日期列表
+    :return: 缺失的日期列表
+    """
+    existing_date_set = set(existing_dates)
+    return [date for date in all_dates if date not in existing_date_set]
+
 def get_qdii_fund_data(fund_code: str, days: int = 30) -> pd.DataFrame:
     """
-    获取QDII基金近N个交易日的涨跌幅数据
+    获取QDII基金近N个交易日的涨跌幅数据（智能获取：先查数据库，再补全缺失数据）
 
     :param fund_code: QDII基金代码
     :param days: 交易日天数
     :return: 包含涨跌幅数据的DataFrame
     """
     try:
-        # 计算开始日期（多取一些数据确保有足够的交易日）
-        end_date = datetime.now().strftime("%Y%m%d")
-        start_date = (datetime.now() - timedelta(days=days*2)).strftime("%Y%m%d")
+        # 计算日期范围
+        end_date = datetime.now().date()
+        start_date = (end_date - timedelta(days=days*2)).strftime("%Y-%m-%d")
+        end_date_str = end_date.strftime("%Y-%m-%d")
 
-        # 使用现有的ETF历史数据接口
-        df = ak.fund_etf_hist_em(
-            symbol=fund_code,
-            period="daily",
-            start_date=start_date,
-            end_date=end_date,
-            adjust=""
-        )
+        print(f"📊 先从数据库查询数据 ({start_date} 到 {end_date_str})...")
 
-        if df.empty:
-            raise ValueError(f"未找到基金代码 {fund_code} 的历史数据")
+        # 1. 先从数据库查询数据
+        db_df = query_from_database(fund_code, start_date, end_date_str)
 
-        # 确保日期列是datetime类型
-        df['日期'] = pd.to_datetime(df['日期'])
+        if not db_df.empty:
+            print(f"✅ 从数据库获取到 {len(db_df)} 条历史数据")
 
-        # 按日期排序并取最近N个交易日
-        df = df.sort_values('日期', ascending=False).head(days)
+        # 2. 计算需要的所有交易日日期
+        all_required_dates = pd.date_range(end=end_date, periods=days, freq='B')  # 工作日
 
-        return df.reset_index(drop=True)
+        if not db_df.empty:
+            # 3. 检查哪些日期在数据库中缺失
+            existing_dates = set(db_df['日期'].dt.date)
+            missing_dates = [date for date in all_required_dates if date.date() not in existing_dates]
+
+            if missing_dates:
+                print(f"📝 发现 {len(missing_dates)} 个缺失交易日，正在从API获取...")
+                # 4. 获取缺失日期的数据
+                missing_start = missing_dates[0].strftime("%Y%m%d")
+                missing_end = missing_dates[-1].strftime("%Y%m%d")
+
+                api_df = ak.fund_etf_hist_em(
+                    symbol=fund_code,
+                    period="daily",
+                    start_date=missing_start,
+                    end_date=missing_end,
+                    adjust=""
+                )
+
+                if not api_df.empty:
+                    api_df['日期'] = pd.to_datetime(api_df['日期'])
+                    # 5. 合并数据库数据和API数据
+                    combined_df = pd.concat([db_df, api_df], ignore_index=True)
+                    # 去重并排序
+                    combined_df = combined_df.drop_duplicates('日期').sort_values('日期', ascending=False).head(days)
+                    print(f"✅ 成功合并数据库和API数据，总计 {len(combined_df)} 条数据")
+                    return combined_df.reset_index(drop=True)
+                else:
+                    print("⚠️  API未返回缺失日期数据，使用数据库现有数据")
+                    return db_df.sort_values('日期', ascending=False).head(days).reset_index(drop=True)
+            else:
+                print("✅ 数据库已包含所有需要的数据")
+                return db_df.sort_values('日期', ascending=False).head(days).reset_index(drop=True)
+        else:
+            # 数据库中没有数据，完全从API获取
+            print("📡 数据库中无数据，从API获取完整数据...")
+            start_date_api = (end_date - timedelta(days=days*2)).strftime("%Y%m%d")
+            end_date_api = end_date.strftime("%Y%m%d")
+
+            df = ak.fund_etf_hist_em(
+                symbol=fund_code,
+                period="daily",
+                start_date=start_date_api,
+                end_date=end_date_api,
+                adjust=""
+            )
+
+            if df.empty:
+                raise ValueError(f"未找到基金代码 {fund_code} 的历史数据")
+
+            df['日期'] = pd.to_datetime(df['日期'])
+            df = df.sort_values('日期', ascending=False).head(days)
+            return df.reset_index(drop=True)
 
     except Exception as e:
-        print(f"❌ 网络请求失败: {e}")
+        print(f"❌ 数据获取失败: {e}")
         print("💡 正在尝试使用模拟数据演示功能...")
-
-        # 生成模拟数据用于演示
         return generate_mock_data(fund_code, days)
 
 def generate_mock_data(fund_code: str, days: int = 30) -> pd.DataFrame:
