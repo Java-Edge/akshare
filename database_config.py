@@ -2,8 +2,8 @@
 MYSQL_CONFIG = {
     'host': 'localhost',
     'port': 3306,
-    'user': 'root',  # 请根据实际情况修改
-    'password': '123456',  # 请根据实际情况修改
+    'user': 'root',
+    'password': '123456',
     'database': 'trade',
     'charset': 'utf8mb4'
 }
@@ -27,4 +27,21 @@ CREATE TABLE IF NOT EXISTS qdii_fund_data (
     INDEX idx_fund_code (fund_code),
     INDEX idx_trade_date (trade_date)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='QDII基金历史数据表';
+"""
+
+# 查询SQL语句
+QUERY_DATA_SQL = """
+SELECT 
+    trade_date as '日期',
+    open_price as '开盘',
+    close_price as '收盘', 
+    high_price as '最高',
+    low_price as '最低',
+    change_percent as '涨跌幅',
+    volume as '成交量',
+    turnover as '成交额'
+FROM qdii_fund_data 
+WHERE fund_code = %s 
+AND trade_date BETWEEN %s AND %s 
+ORDER BY trade_date DESC
 """

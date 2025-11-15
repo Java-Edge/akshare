@@ -448,7 +448,6 @@ class InvestmentAdvisor:
             print(f"  • {reason}")
 
         print(f"\n{'='*70}")
-        print("⚠️  免责声明: 以上建议仅供参考，不构成投资建议，投资有风险，入市需谨慎！")
         print(f"{'='*70}\n")
 
 

@@ -77,7 +77,7 @@ def get_missing_dates(existing_dates, all_dates):
 
 def get_qdii_fund_data(fund_code: str, days: int = 30) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
-    获取QDII基金近N个交易日的涨跌幅数据（智能获取：先查数据库，再补全缺失数据）
+    获取QDII基金近N个交易日的涨跌幅数据
 
     :param fund_code: QDII基金代码
     :param days: 交易日天数
@@ -298,7 +298,7 @@ def analyze_fund_performance(df: pd.DataFrame, fund_code: str, days: int):
     print(f"波动率: {volatility:.2f}%")
     print(f"上涨天数: {positive_days}/{days} ({positive_days/days*100:.1f}%)")
 
-    # 使用专业的投资建议模块（独立的详细分析和建议）
+    # 使用专业的投资建议模块
     quick_advice(df, fund_code)
 
 
@@ -368,8 +368,8 @@ def main():
     """主函数 - 直接代码调用示例"""
     try:
         # 直接在代码中设置参数
-        fund_code = "513100"  # 纳斯达克100ETF，可以改成其他代码
-        days = 30             # 分析最近30个交易日
+        fund_code = "513100"  # 纳斯达克100ETF，可以改成其他代码 TODO 支持 list 传递多个基金代码
+        days = 30             # 分析最近 N 个交易日
         save_path = None      # 图片保存路径，设为None则显示不保存
 
         # 获取基金数据（返回完整数据和新获取的数据）
