@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding:utf-8 -*-
 """
-Date: 2025/3/20 19:00
+Date: 2026/1/9 22:00
 Desc: 新浪财经-A股-实时行情数据和历史行情数据(包含前复权和后复权因子)
 https://finance.sina.com.cn/realstock/company/sh689009/nc.shtml
 """
@@ -466,13 +466,15 @@ def stock_zh_a_minute(
         temp_df = merged_df[["day", "open", "high", "low", "close", "volume"]]
         temp_df.reset_index(drop=True, inplace=True)
         return temp_df
+    else:
+        return pd.DataFrame()
 
 
 if __name__ == "__main__":
     stock_zh_a_daily_hfq_df_one = stock_zh_a_daily(
-        symbol="sz000001",
+        symbol="sz000002",
         start_date="19910403",
-        end_date="20231027",
+        end_date="20260109",
         adjust="hfq",
     )
     print(stock_zh_a_daily_hfq_df_one)

@@ -1,23 +1,44 @@
 #!/usr/bin/env python
 # -*- coding:utf-8 -*-
 """
-Date: 2024/12/2 15:20
+Date: 2025/11/12 15:20
 Desc: 宏观数据-中国
 """
 
 import datetime
 import json
 import math
+import ssl
 import time
 
 import pandas as pd
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.poolmanager import PoolManager
 
 from akshare.economic.cons import (
     JS_CHINA_ENERGY_DAILY_URL,
 )
 from akshare.utils import demjson
 from akshare.utils.tqdm import get_tqdm
+
+
+class TLSAdapter(HTTPAdapter):
+    def init_poolmanager(self, connections, maxsize, block=False):
+        ctx = ssl.create_default_context()
+        # 降低安全级别以兼容旧服务器
+        ctx.set_ciphers("DEFAULT@SECLEVEL=1")
+        # 禁用不安全的协议
+        ctx.options |= ssl.OP_NO_SSLv2
+        ctx.options |= ssl.OP_NO_SSLv3
+        # 指定使用 TLSv1.2
+        self.poolmanager = PoolManager(
+            num_pools=connections,
+            maxsize=maxsize,
+            block=block,
+            ssl_version=ssl.PROTOCOL_TLSv1_2,
+            ssl_context=ctx,
+        )
 
 
 def __macro_china_base_func(symbol: str, params: dict) -> pd.DataFrame:
@@ -240,8 +261,10 @@ def macro_china_shrzgm() -> pd.DataFrame:
     :return: 社会融资规模增量统计
     :rtype: pandas.DataFrame
     """
+    session = requests.Session()
+    session.mount(prefix="https://", adapter=TLSAdapter())
     url = "https://data.mofcom.gov.cn/datamofcom/front/gnmy/shrzgmQuery"
-    r = requests.post(url)
+    r = session.post(url)
     data_json = r.json()
     temp_df = pd.DataFrame(data_json)
     temp_df.columns = [
@@ -2810,7 +2833,7 @@ def macro_china_czsr() -> pd.DataFrame:
     temp_df["当月-环比增长"] = pd.to_numeric(temp_df["当月-环比增长"], errors="coerce")
     temp_df["累计"] = pd.to_numeric(temp_df["累计"], errors="coerce")
     temp_df["累计-同比增长"] = pd.to_numeric(temp_df["累计-同比增长"], errors="coerce")
-
+    temp_df.sort_values(by=["月份"], ignore_index=True, inplace=True)
     return temp_df
 
 
@@ -2860,6 +2883,7 @@ def macro_china_whxd() -> pd.DataFrame:
     temp_df["同比增长"] = pd.to_numeric(temp_df["同比增长"], errors="coerce")
     temp_df["环比增长"] = pd.to_numeric(temp_df["环比增长"], errors="coerce")
     temp_df["累计"] = pd.to_numeric(temp_df["累计"], errors="coerce")
+    temp_df.sort_values(by=["月份"], ignore_index=True, inplace=True)
     return temp_df
 
 
@@ -2909,7 +2933,6 @@ def macro_china_wbck() -> pd.DataFrame:
     temp_df["同比增长"] = pd.to_numeric(temp_df["同比增长"], errors="coerce")
     temp_df["环比增长"] = pd.to_numeric(temp_df["环比增长"], errors="coerce")
     temp_df["累计"] = pd.to_numeric(temp_df["累计"], errors="coerce")
-
     return temp_df
 
 

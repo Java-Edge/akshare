@@ -168,8 +168,6 @@
  "energy_carbon_eu"  # 碳排放权-国际
  "energy_carbon_hb"  # 碳排放权-湖北
  "energy_carbon_gz"  # 碳排放权-广州
- # 生活成本
- "cost_living"  # 世界各大城市生活成本数据
  # 商品现货价格指数
  "spot_goods"  # 商品现货价格指数
  # 中国宏观杠杆率
@@ -390,7 +388,6 @@
  "stock_comment_detail_zhpj_lspf_em"  # 综合评价-历史评分
  "stock_comment_detail_scrd_focus_em"  # 市场热度-用户关注指数
  "stock_comment_detail_scrd_desire_em"  # 市场热度-市场参与意愿
- "stock_comment_detail_scrd_desire_daily_em"  # 市场热度-日度市场参与意愿
  # 沪深港通
  "stock_hk_ggt_components_em"  # 港股通成份股
  "stock_hsgt_hold_stock_em"  # 沪深港通持股-个股排行
@@ -484,7 +481,7 @@
  "stock_a_high_low_statistics"  # 创新高和新低的股票数量
  "stock_a_below_net_asset_statistics"  # 破净股统计
  # 交易日历
- "tool_trade_date_hist"  # 新浪财经-交易日历
+ "tool_trade_date_hist_sina"  # 新浪财经-交易日历
  # 基金行情
  "fund_etf_category_sina"  # 基金实时行情-新浪
  "fund_etf_hist_sina"  # 基金行情-新浪
@@ -649,7 +646,7 @@
  "stock_lrb_em"  # 三大表报-利润表
  "stock_xjll_em"  # 三大表报-现金流量表
  # 首发企业申报
- "stock_ipo_declare"  # 首发企业申报
+ "stock_ipo_declare_em"  # 首发企业申报
  # 行业板块
  "stock_board_industry_index_ths"  # 同花顺-行业板块-指数日频数据
  # 概念板块
@@ -1174,10 +1171,10 @@
  "stock_hk_index_spot_em"  # 东方财富网-行情中心-港股-指数实时行情
  "stock_hk_index_daily_em"  # 东方财富网-港股-股票指数数据
  # 同花顺-财务指标-主要指标
- "stock_financial_abstract_ths"  # 同花顺-财务指标-主要指标
- "stock_financial_debt_ths"  # 同花顺-财务指标-资产负债表
- "stock_financial_benefit_ths"  # 同花顺-财务指标-利润表
- "stock_financial_cash_ths"  # 同花顺-财务指标-现金流量表
+ "stock_financial_abstract_new_ths"  # 同花顺-财务指标-主要指标
+ "stock_financial_debt_new_ths"  # 同花顺-财务指标-资产负债表
+ "stock_financial_benefit_new_ths"  # 同花顺-财务指标-利润表
+ "stock_financial_cash_new_ths"  # 同花顺-财务指标-现金流量表
  # LOF 行情
  "fund_lof_hist_em"  # 东方财富-LOF 行情
  "fund_lof_spot_em"  # 东方财富-LOF 实时行情
@@ -1366,6 +1363,11 @@
  "option_current_day_sse"  # 上海证券交易所-产品-股票期权-信息披露-当日合约
  # 期权合约信息
  "option_contract_info_ctp"  # 期权合约信息
+ # 百度股市通-美股-财务报表-估值数据
+ "stock_us_valuation_baidu"  # 百度股市通-美股-财务报表-估值数据
+ # 基金份额
+ "fund_etf_scale_szse"  # 深圳证券交易所-基金产品-基金列表-ETF基金份额
+ "fund_etf_scale_sse"  # 上海证券交易所-产品-基金产品-ETF产品-ETF产品列表-基金规模
 ```
 
 ## 案例演示

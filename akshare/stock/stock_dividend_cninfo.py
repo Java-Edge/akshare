@@ -1,14 +1,14 @@
 # -*- coding:utf-8 -*-
 # !/usr/bin/env python
 """
-Date: 2025/5/4 22:00
+Date: 2025/11/20 22:00
 Desc: 巨潮资讯-个股-历史分红
 https://webapi.cninfo.com.cn/#/company?companyid=600009
 """
 
 import pandas as pd
-import requests
 import py_mini_racer
+import requests
 
 from akshare.datasets import get_ths_js
 
@@ -61,19 +61,22 @@ def stock_dividend_cninfo(symbol: str = "600009") -> pd.DataFrame:
     r = requests.post(url, params=params, headers=headers)
     data_json = r.json()
     temp_df = pd.DataFrame(data_json["records"])
-    temp_df.rename(columns={
-        "F006D": "实施方案公告日期",
-        "F044V": "分红类型",
-        "F011N": "送股比例",
-        "F010N": "转增比例",
-        "F012N": "派息比例",
-        "F018D": "股权登记日",
-        "F020D": "除权日",
-        "F023D": "派息日",
-        "F025D": "股份到账日",
-        "F007V": "实施方案分红说明",
-        "F001V": "报告时间",
-    }, inplace=True)
+    temp_df.rename(
+        columns={
+            "F006D": "实施方案公告日期",
+            "F044V": "分红类型",
+            "F011N": "转增比例",
+            "F010N": "送股比例",
+            "F012N": "派息比例",
+            "F018D": "股权登记日",
+            "F020D": "除权日",
+            "F023D": "派息日",
+            "F025D": "股份到账日",
+            "F007V": "实施方案分红说明",
+            "F001V": "报告时间",
+        },
+        inplace=True,
+    )
 
     temp_df["实施方案公告日期"] = pd.to_datetime(
         temp_df["实施方案公告日期"], errors="coerce"
@@ -87,19 +90,21 @@ def stock_dividend_cninfo(symbol: str = "600009") -> pd.DataFrame:
     temp_df["除权日"] = pd.to_datetime(temp_df["除权日"], errors="coerce").dt.date
     temp_df["派息日"] = pd.to_datetime(temp_df["派息日"], errors="coerce").dt.date
     temp_df.sort_values(by="实施方案公告日期", ignore_index=True, inplace=True)
-    temp_df = temp_df[[
-        "实施方案公告日期",
-        "分红类型",
-        "送股比例",
-        "转增比例",
-        "派息比例",
-        "股权登记日",
-        "除权日",
-        "派息日",
-        "股份到账日",
-        "实施方案分红说明",
-        "报告时间",
-    ]]
+    temp_df = temp_df[
+        [
+            "实施方案公告日期",
+            "分红类型",
+            "送股比例",
+            "转增比例",
+            "派息比例",
+            "股权登记日",
+            "除权日",
+            "派息日",
+            "股份到账日",
+            "实施方案分红说明",
+            "报告时间",
+        ]
+    ]
     return temp_df
 
 
