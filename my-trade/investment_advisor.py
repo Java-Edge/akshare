@@ -16,9 +16,10 @@ QDII基金投资建议模块
 
 import pandas as pd
 import numpy as np
-from typing import Dict
+from typing import Dict, Optional
 from datetime import datetime
 from enum import Enum
+import os
 
 
 class Signal(Enum):
@@ -41,13 +42,20 @@ class RiskLevel(Enum):
 class InvestmentAdvisor:
     """投资建议生成器"""
 
-    def __init__(self, config: Dict = None):
+    def __init__(self, config: Dict = None, use_llm: bool = True):
         """
         初始化投资顾问
 
         :param config: 配置参数字典
+        :param use_llm: 是否使用本地大模型进行深度分析
         """
         self.config = config or self._default_config()
+        self.use_llm = use_llm
+        self.llm_client = None
+        self.investment_principles = None
+
+        if use_llm:
+            self._init_llm()
 
     def _default_config(self) -> Dict:
         """默认配置参数"""
@@ -71,6 +79,42 @@ class InvestmentAdvisor:
             'max_position': 100,           # 最大仓位（%）
             'min_position': 10,            # 最小仓位（%）
         }
+
+    def _init_llm(self):
+        """初始化本地大模型"""
+        try:
+            from llm_client import get_llm_client
+            self.llm_client = get_llm_client()
+            if self.llm_client:
+                print("✅ 本地大模型已启用")
+            else:
+                print("⚠️  本地大模型不可用，将使用基础分析")
+                self.use_llm = False
+        except ImportError:
+            print("⚠️  未找到llm_client模块，将使用基础分析")
+            self.use_llm = False
+
+        # 加载投资原则
+        self._load_investment_principles()
+
+    def _load_investment_principles(self):
+        """加载投资原则文档"""
+        try:
+            principle_path = os.path.join(
+                os.path.dirname(__file__),
+                'docs',
+                'principle.md'
+            )
+            if os.path.exists(principle_path):
+                with open(principle_path, 'r', encoding='utf-8') as f:
+                    self.investment_principles = f.read()
+                print("✅ 投资原则文档已加载")
+            else:
+                print(f"⚠️  未找到投资原则文档: {principle_path}")
+                self.use_llm = False
+        except Exception as e:
+            print(f"⚠️  加载投资原则失败: {e}")
+            self.use_llm = False
 
     def analyze(self, df: pd.DataFrame, fund_code: str = None) -> Dict:
         """
@@ -101,6 +145,21 @@ class InvestmentAdvisor:
         # 7. 具体操作建议
         action = self._generate_action_plan(signal, position, stats, trend)
 
+        # 8. LLM深度分析（如果启用）
+        llm_analysis = None
+        if self.use_llm and self.llm_client and self.investment_principles:
+            llm_analysis = self._llm_deep_analysis({
+                'fund_code': fund_code,
+                'analysis_date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                'statistics': stats,
+                'technical': technical,
+                'trend': trend,
+                'risk': risk,
+                'signal': signal,
+                'position': position,
+                'action': action,
+            })
+
         return {
             'fund_code': fund_code,
             'analysis_date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
@@ -111,6 +170,7 @@ class InvestmentAdvisor:
             'signal': signal,
             'position': position,
             'action': action,
+            'llm_analysis': llm_analysis,  # 新增LLM分析结果
         }
 
     def _calculate_statistics(self, df: pd.DataFrame) -> Dict:
@@ -384,6 +444,23 @@ class InvestmentAdvisor:
             'summary': actions[0] if actions else "无操作建议",
         }
 
+    def _llm_deep_analysis(self, market_data: Dict) -> Optional[str]:
+        """
+        使用本地大模型进行深度分析
+
+        :param market_data: 市场数据字典
+        :return: LLM分析结果文本
+        """
+        try:
+            analysis = self.llm_client.analyze_investment(
+                market_data=market_data,
+                principles=self.investment_principles
+            )
+            return analysis if analysis else None
+        except Exception as e:
+            print(f"⚠️  LLM分析出错: {e}")
+            return None
+
     def print_advice(self, advice: Dict):
         """格式化打印投资建议"""
         print(f"\n{'='*70}")
@@ -446,6 +523,13 @@ class InvestmentAdvisor:
         print(f"\n📝 理由分析:")
         for reason in action['reasons']:
             print(f"  • {reason}")
+
+        # LLM深度分析（如果有）
+        if advice.get('llm_analysis'):
+            print(f"\n{'='*70}")
+            print(f"🤖 AI投资顾问深度分析（基于您的投资原则）")
+            print(f"{'='*70}")
+            print(advice['llm_analysis'])
 
         print(f"\n{'='*70}")
         print(f"{'='*70}\n")
