@@ -18,7 +18,8 @@ class LocalLLMClient:
     """本地大模型客户端"""
 
     def __init__(self, api_url: str = "http://10.56.88.6:1234/v1/chat/completions",
-                 model: str = "google/gemma-3-27b",
+                 # model: str = "google/gemma-3-27b",
+                 model: str = "openai/gpt-oss-120b",
                  timeout: int = 120):
         """
         初始化本地LLM客户端
