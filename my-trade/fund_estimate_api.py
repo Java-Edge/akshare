@@ -29,8 +29,10 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 CORS(app)  # 启用跨域支持
 
-# 初始化基金API和数据库
-fund_api = FundAPI()
+# 初始化基金API（启用Redis缓存，TTL=30秒）
+fund_api = FundAPI(use_redis=True, redis_ttl=30)
+
+# 初始化数据库
 try:
     fund_db = FundEstimateDB()
     logger.info("✅ 数据库连接成功")
@@ -451,13 +453,71 @@ def health_check():
     返回:
         {
             "status": "ok",
-            "timestamp": "2026-02-01 22:00:00"
+            "timestamp": "2026-02-01 22:00:00",
+            "redis_enabled": true,
+            "redis_stats": {...},
+            "database_enabled": true
         }
     """
-    return jsonify({
+    health_info = {
         'status': 'ok',
-        'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    }), 200
+        'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        'redis_enabled': False,
+        'database_enabled': fund_db is not None
+    }
+
+    # 检查Redis状态
+    if hasattr(fund_api, 'redis_cache') and fund_api.redis_cache:
+        health_info['redis_enabled'] = fund_api.redis_cache.enabled
+        if fund_api.redis_cache.enabled:
+            health_info['redis_stats'] = fund_api.redis_cache.get_stats()
+
+    return jsonify(health_info), 200
+
+
+@app.route('/api/cache/clear', methods=['POST'])
+def clear_cache():
+    """
+    清空Redis缓存
+
+    请求体:
+        {
+            "prefix": "fund_estimate"  // 可选，不提供则清空所有基金估值缓存
+        }
+
+    返回:
+        {
+            "success": true,
+            "message": "清空缓存成功",
+            "count": 10
+        }
+    """
+    try:
+        if not hasattr(fund_api, 'redis_cache') or not fund_api.redis_cache or not fund_api.redis_cache.enabled:
+            return jsonify({
+                'success': False,
+                'message': 'Redis缓存未启用'
+            }), 503
+
+        data = request.get_json() or {}
+        prefix = data.get('prefix', 'fund_estimate')
+
+        count = fund_api.redis_cache.clear_prefix(prefix)
+
+        logger.info(f"清空Redis缓存: {prefix} ({count}个键)")
+
+        return jsonify({
+            'success': True,
+            'message': f'清空缓存成功',
+            'count': count
+        }), 200
+
+    except Exception as e:
+        logger.error(f"清空缓存失败: {e}")
+        return jsonify({
+            'success': False,
+            'message': f'清空缓存失败: {str(e)}'
+        }), 500
 
 
 @app.errorhandler(404)
@@ -491,8 +551,16 @@ if __name__ == '__main__':
     logger.info("  GET  /api/fund/search?keyword=xxx    - 搜索基金")
     logger.info("  GET  /api/fund/history/<fund_code>   - 查询历史估值数据")
     logger.info("  GET  /api/health                     - 健康检查")
+    logger.info("  POST /api/cache/clear                - 清空Redis缓存")
     logger.info("=" * 80)
     logger.info(f"数据库状态: {'✅ 已连接' if fund_db else '❌ 未连接（仅API模式）'}")
+
+    # 显示Redis缓存状态
+    if hasattr(fund_api, 'redis_cache') and fund_api.redis_cache and fund_api.redis_cache.enabled:
+        logger.info(f"Redis缓存: ✅ 已启用 (TTL: {fund_api.redis_cache.default_ttl}秒)")
+    else:
+        logger.info(f"Redis缓存: ❌ 未启用")
+
     logger.info("=" * 80)
 
     # 启动服务

@@ -12,7 +12,7 @@ import requests
 import json
 from typing import Dict, List
 
-API_BASE_URL = "http://localhost:5000/api"
+API_BASE_URL = "http://localhost:8083/api"
 
 
 def test_health_check():
@@ -216,7 +216,7 @@ def main():
     print("  基金估值API测试客户端")
     print("=" * 80)
     print("\n⚠️  请确保API服务已启动 (python fund_estimate_api.py)")
-    print("   服务地址: http://localhost:5000")
+    print("   服务地址: http://localhost:8083")
 
     input("\n按回车键开始测试...")
 

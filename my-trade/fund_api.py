@@ -16,12 +16,24 @@ import warnings
 
 warnings.filterwarnings('ignore')
 
+# 尝试导入Redis缓存
+try:
+    from redis_cache import get_redis_cache
+    REDIS_AVAILABLE = True
+except ImportError:
+    REDIS_AVAILABLE = False
+
 
 class FundAPI:
     """场外基金API封装类"""
 
-    def __init__(self):
-        """初始化基金API"""
+    def __init__(self, use_redis: bool = True, redis_ttl: int = 30):
+        """
+        初始化基金API
+
+        :param use_redis: 是否使用Redis缓存，默认True
+        :param redis_ttl: Redis缓存过期时间（秒），默认30秒
+        """
         self.fund_types = {
             '全部': 'all',
             '股票型': 'stock',
@@ -34,15 +46,41 @@ class FundAPI:
             '场内交易基金': 'on_exchange'
         }
 
+        # 初始化Redis缓存
+        self.redis_cache = None
+        self.use_redis = use_redis and REDIS_AVAILABLE
+
+        if self.use_redis:
+            try:
+                self.redis_cache = get_redis_cache(ttl=redis_ttl)
+                if not self.redis_cache.enabled:
+                    self.use_redis = False
+                    print("⚠️  Redis缓存未启用，将直接调用API")
+            except Exception as e:
+                self.use_redis = False
+                print(f"⚠️  Redis初始化失败: {e}，将直接调用API")
+
     def get_fund_realtime_value(self, fund_code: str) -> Optional[Dict]:
         """
         获取指定场外基金的实时估值
+
+        优先从Redis缓存读取，缓存未命中才调用API
+        缓存TTL默认30秒
 
         :param fund_code: 6位基金代码，如 '000001'
         :return: 包含基金实时估值信息的字典，失败返回None
         """
         try:
-            # 获取所有基金的实时估值数据
+            # 尝试从Redis缓存获取
+            if self.use_redis and self.redis_cache:
+                cached_data = self.redis_cache.get('fund_estimate', fund_code)
+                if cached_data:
+                    print(f"✅ 从Redis缓存获取基金 {fund_code} 数据")
+                    # 移除内部缓存时间戳
+                    cached_data.pop('_cached_at', None)
+                    return cached_data
+
+            # 缓存未命中，调用API获取数据
             print(f"📊 正在查询基金 {fund_code} 的实时估值...")
             df = ak.fund_value_estimation_em(symbol="全部")
 
@@ -58,6 +96,7 @@ class FundAPI:
                 print(f"💡 提示：请确认基金代码是否正确，或该基金是否为场外基金")
                 return None
 
+            # ...existing code for extracting fund data...
             # 提取第一条记录（应该只有一条）
             row = fund_data.iloc[0]
 
@@ -110,6 +149,11 @@ class FundAPI:
                     fund_info['上一日净值'] = float(last_value) if pd.notna(last_value) and str(last_value) != '---' else None
                 except (ValueError, TypeError):
                     fund_info['上一日净值'] = None
+
+            # 存入Redis缓存
+            if self.use_redis and self.redis_cache:
+                self.redis_cache.set('fund_estimate', fund_code, fund_info)
+                print(f"✅ 基金 {fund_code} 数据已缓存到Redis (TTL: {self.redis_cache.default_ttl}秒)")
 
             return fund_info
 

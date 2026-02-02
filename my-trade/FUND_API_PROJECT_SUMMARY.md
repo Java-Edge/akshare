@@ -95,7 +95,7 @@ MYSQL_CONFIG = {
 python fund_estimate_api.py
 ```
 
-服务将在 `http://localhost:5000` 启动。
+服务将在 `http://localhost:8083` 启动。
 
 ### 4. 测试API
 
@@ -110,7 +110,7 @@ python test_api_client.py
 ### 查询单个基金
 
 ```bash
-curl http://localhost:5000/api/fund/estimate/000001
+curl http://localhost:8083/api/fund/estimate/000001
 ```
 
 响应:
@@ -133,7 +133,7 @@ curl http://localhost:5000/api/fund/estimate/000001
 ### 批量查询
 
 ```bash
-curl -X POST http://localhost:5000/api/fund/estimate/batch \
+curl -X POST http://localhost:8083/api/fund/estimate/batch \
   -H "Content-Type: application/json" \
   -d '{"codes": ["000001", "161116"]}'
 ```
@@ -141,13 +141,13 @@ curl -X POST http://localhost:5000/api/fund/estimate/batch \
 ### 搜索基金
 
 ```bash
-curl http://localhost:5000/api/fund/search?keyword=黄金
+curl http://localhost:8083/api/fund/search?keyword=黄金
 ```
 
 ### 查询历史数据
 
 ```bash
-curl http://localhost:5000/api/fund/history/000001?days=7
+curl http://localhost:8083/api/fund/history/000001?days=7
 ```
 
 ## 🔧 前端集成
@@ -170,7 +170,7 @@ function FundCard({ code }: { code: string }) {
   const [data, setData] = useState<FundEstimate | null>(null)
 
   useEffect(() => {
-    fetch(`http://localhost:5000/api/fund/estimate/${code}`)
+    fetch(`http://localhost:8083/api/fund/estimate/${code}`)
       .then(res => res.json())
       .then(result => {
         if (result.success) {
@@ -210,7 +210,7 @@ const props = defineProps<{ code: string }>()
 const data = ref<FundEstimate | null>(null)
 
 onMounted(async () => {
-  const res = await fetch(`http://localhost:5000/api/fund/estimate/${props.code}`)
+  const res = await fetch(`http://localhost:8083/api/fund/estimate/${props.code}`)
   const result = await res.json()
   if (result.success) {
     data.value = result.data
@@ -295,11 +295,11 @@ python fund_estimate_api.py
 ### 生产环境
 ```bash
 # 使用Gunicorn
-gunicorn -w 4 -b 0.0.0.0:5000 fund_estimate_api:app
+gunicorn -w 4 -b 0.0.0.0:8083 fund_estimate_api:app
 
 # 使用Supervisor管理进程
 [program:fund_api]
-command=gunicorn -w 4 -b 0.0.0.0:5000 fund_estimate_api:app
+command=gunicorn -w 4 -b 0.0.0.0:8083 fund_estimate_api:app
 directory=/path/to/my-trade
 autostart=true
 autorestart=true
@@ -312,7 +312,7 @@ server {
     server_name api.example.com;
 
     location /api/ {
-        proxy_pass http://localhost:5000;
+        proxy_pass http://localhost:8083;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
     }

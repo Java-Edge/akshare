@@ -14,7 +14,7 @@ pip install flask flask-cors pymysql akshare pandas
 python fund_estimate_api.py
 
 # 3. 测试API（新开终端）
-curl http://localhost:5000/api/fund/estimate/000001
+curl http://localhost:8083/api/fund/estimate/000001
 ```
 
 就这么简单！🎉
@@ -79,7 +79,7 @@ GET /api/fund/history/000001?days=7
 const [data, setData] = useState<FundEstimate | null>(null)
 
 useEffect(() => {
-  fetch('http://localhost:5000/api/fund/estimate/000001')
+  fetch('http://localhost:8083/api/fund/estimate/000001')
     .then(res => res.json())
     .then(result => setData(result.data))
 }, [])
@@ -90,7 +90,7 @@ useEffect(() => {
 const data = ref<FundEstimate | null>(null)
 
 onMounted(async () => {
-  const res = await fetch('http://localhost:5000/api/fund/estimate/000001')
+  const res = await fetch('http://localhost:8083/api/fund/estimate/000001')
   const result = await res.json()
   data.value = result.data
 })
@@ -172,7 +172,7 @@ A: 确认基金代码正确，且为场外基金。
 ```bash
 # 使用Gunicorn
 pip install gunicorn
-gunicorn -w 4 -b 0.0.0.0:5000 fund_estimate_api:app
+gunicorn -w 4 -b 0.0.0.0:8083 fund_estimate_api:app
 ```
 
 ## 💡 下一步
